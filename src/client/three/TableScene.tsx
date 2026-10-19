@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { CHAR_BY_ID, FACTION_NAME } from '../../engine/data'
 import type { Card, Method } from '../../engine/types'
 import type { GameView, PublicPlayer } from '../../engine/view'
+import { IntelSummary } from '../ui/IntelSummary'
 import { cardBackTexture, cardTexture, clearTextures, dossierTexture } from './textures'
 
 // 3D 牌桌：圍坐的特工、桌上的情報、在座位間移動的卷宗
@@ -19,13 +20,18 @@ function seatAngle(seat: number, me: number, n: number) {
 }
 const polar = (theta: number, r: number, y: number) => new THREE.Vector3(r * Math.sin(theta), y, r * Math.cos(theta))
 
+export type ViewMode = 'first' | 'overview'
+
 export interface SceneProps {
   v: GameView
   waitingOn: number[]
   aiControlled: number[]
+  mode: ViewMode
+  /** 第一人稱時，手上被選取的牌（會抬高） */
+  selected?: number | null
 }
 
-export function TableScene({ v, waitingOn, aiControlled }: SceneProps) {
+export function TableScene({ v, waitingOn, aiControlled, mode, selected }: SceneProps) {
   const [fontsReady, setFontsReady] = useState(0)
   useEffect(() => {
     void document.fonts?.ready.then(() => {
@@ -41,7 +47,7 @@ export function TableScene({ v, waitingOn, aiControlled }: SceneProps) {
       <ambientLight intensity={0.75} color="#ffe8c8" />
       <hemisphereLight args={['#ffe2b8', '#2a1a10', 0.9]} />
       <directionalLight position={[0, 6, 9]} intensity={0.9} color="#ffe6c4" />
-      <CameraRig />
+      {mode === 'overview' ? <CameraRig /> : <FirstPersonRig />}
       <Lamp />
       <Floor />
       <Table />
@@ -55,9 +61,12 @@ export function TableScene({ v, waitingOn, aiControlled }: SceneProps) {
           acting={waitingOn.includes(p.seat)}
           aiControlled={aiControlled.includes(p.seat)}
           reduced={reduced}
+          mode={mode}
         />
       ))}
+      {mode === 'first' && <MyHand v={v} selected={selected ?? null} />}
       <Dossier v={v} reduced={reduced} />
+      {mode === 'overview' && (
       <OrbitControls
         target={[0, TABLE_Y, 0.2]}
         enablePan={false}
@@ -69,6 +78,7 @@ export function TableScene({ v, waitingOn, aiControlled }: SceneProps) {
         maxAzimuthAngle={0.9}
         enableDamping
       />
+      )}
     </Canvas>
   )
 }
@@ -85,6 +95,96 @@ function CameraRig() {
     camera.lookAt(0, TABLE_Y, 0.2)
   }, [camera, size.width, size.height])
   return null
+}
+
+const EYE = new THREE.Vector3(0, 2.35, SEAT_R + 0.3)
+
+/** 第一人稱：坐在自己的位子上，拖曳可以轉頭看其他人 */
+function FirstPersonRig() {
+  const { camera, size, gl } = useThree()
+  const look = useRef({ yaw: 0, pitch: -0.36 })
+  useEffect(() => {
+    const cam = camera as THREE.PerspectiveCamera
+    const portrait = size.width < size.height
+    cam.fov = portrait ? 86 : 70
+    cam.updateProjectionMatrix()
+    cam.position.copy(EYE)
+    if (portrait) cam.position.z += 0.6
+    return () => {
+      cam.fov = 44
+      cam.updateProjectionMatrix()
+    }
+  }, [camera, size.width, size.height])
+  useEffect(() => {
+    const el = gl.domElement
+    let drag: { x: number; y: number } | null = null
+    const down = (e: PointerEvent) => {
+      drag = { x: e.clientX, y: e.clientY }
+      el.setPointerCapture(e.pointerId)
+    }
+    const move = (e: PointerEvent) => {
+      if (!drag) return
+      const L = look.current
+      L.yaw = Math.max(-1.15, Math.min(1.15, L.yaw - (e.clientX - drag.x) * 0.004))
+      L.pitch = Math.max(-0.9, Math.min(0.15, L.pitch - (e.clientY - drag.y) * 0.004))
+      drag = { x: e.clientX, y: e.clientY }
+    }
+    const up = () => (drag = null)
+    el.addEventListener('pointerdown', down)
+    el.addEventListener('pointermove', move)
+    el.addEventListener('pointerup', up)
+    el.addEventListener('pointercancel', up)
+    return () => {
+      el.removeEventListener('pointerdown', down)
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerup', up)
+      el.removeEventListener('pointercancel', up)
+    }
+  }, [gl])
+  useFrame(() => {
+    const { yaw, pitch } = look.current
+    const dir = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch))
+    camera.lookAt(camera.position.clone().add(dir))
+  })
+  return null
+}
+
+/** 第一人稱時，自己雙手拿著的手牌（看得到牌面） */
+function MyHand({ v, selected }: { v: GameView; selected: number | null }) {
+  const cards = v.hand.slice(0, 14)
+  const n = cards.length
+  const spread = Math.min(0.3 * Math.max(0, n - 1), 1.9)
+  const coat = COATS[v.me % COATS.length]
+  if (v.players[v.me]?.status !== 'alive') return null
+  return (
+    <group position={[0, 1.78, SEAT_R - 0.42]} rotation-x={-0.6}>
+      {cards.map((c, i) => {
+        const a = n > 1 ? -spread / 2 + (spread * i) / (n - 1) : 0
+        const up = c.id === selected ? 0.05 : 0
+        return (
+          <group key={c.id} rotation-z={-a} position={[0, 0, i * 0.004]}>
+            <mesh position={[0, 0.15 + up, 0]}>
+              <planeGeometry args={[0.13, 0.185]} />
+              <meshStandardMaterial map={cardTexture(c)} side={THREE.DoubleSide} roughness={0.8} />
+            </mesh>
+          </group>
+        )
+      })}
+      {/* 雙手 */}
+      {[-1, 1].map((sx) => (
+        <group key={sx}>
+          <mesh position={[sx * 0.075, 0.0, 0.04]}>
+            <sphereGeometry args={[0.042, 14, 12]} />
+            <meshStandardMaterial color="#d8b18e" />
+          </mesh>
+          <mesh position={[sx * 0.14, -0.08, 0.22]} rotation={[1.15, 0, sx * 0.4]}>
+            <capsuleGeometry args={[0.045, 0.3, 6, 12]} />
+            <meshStandardMaterial color={coat} roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  )
 }
 
 function Lamp() {
@@ -192,7 +292,23 @@ function Limb({ from, to, r, color, opacity }: { from: THREE.Vector3; to: THREE.
   )
 }
 
-function Figure({ coat, opacity, slump, acting, reduced, seat }: { coat: string; opacity: number; slump: boolean; acting: boolean; reduced: boolean; seat: number }) {
+function Figure({
+  coat,
+  opacity,
+  slump,
+  acting,
+  reduced,
+  seat,
+  cards,
+}: {
+  coat: string
+  opacity: number
+  slump: boolean
+  acting: boolean
+  reduced: boolean
+  seat: number
+  cards: number
+}) {
   const body = useRef<THREE.Group>(null)
   const head = useRef<THREE.Group>(null)
   useFrame(({ clock }) => {
@@ -209,10 +325,12 @@ function Figure({ coat, opacity, slump, acting, reduced, seat }: { coat: string;
   const hat = '#1e1a18'
   const sL = new THREE.Vector3(-0.36, 1.62, 0.02)
   const sR = new THREE.Vector3(0.36, 1.62, 0.02)
-  const eL = new THREE.Vector3(-0.42, 1.18, 0.38)
-  const eR = new THREE.Vector3(0.42, 1.18, 0.38)
-  const hL = new THREE.Vector3(-0.2, TABLE_Y + 0.08, 0.78)
-  const hR = new THREE.Vector3(0.2, TABLE_Y + 0.08, 0.78)
+  // 拿著手牌：雙手舉在胸前；沒有手牌：手放在桌上
+  const holding = cards > 0 && !slump
+  const eL = holding ? new THREE.Vector3(-0.4, 1.22, 0.3) : new THREE.Vector3(-0.42, 1.18, 0.38)
+  const eR = holding ? new THREE.Vector3(0.4, 1.22, 0.3) : new THREE.Vector3(0.42, 1.18, 0.38)
+  const hL = holding ? new THREE.Vector3(-0.13, 1.44, 0.56) : new THREE.Vector3(-0.2, TABLE_Y + 0.08, 0.78)
+  const hR = holding ? new THREE.Vector3(0.13, 1.44, 0.56) : new THREE.Vector3(0.2, TABLE_Y + 0.08, 0.78)
   return (
     <group>
       {/* 椅子 */}
@@ -258,6 +376,7 @@ function Figure({ coat, opacity, slump, acting, reduced, seat }: { coat: string;
               <meshStandardMaterial color={skin} transparent={tr} opacity={opacity} />
             </mesh>
           ))}
+          {holding && <HeldFan n={cards} />}
           {/* 頭與帽子 */}
           <group ref={head} position={[0, 1.98, 0]}>
             <mesh castShadow>
@@ -279,6 +398,28 @@ function Figure({ coat, opacity, slump, acting, reduced, seat }: { coat: string;
           </group>
         </group>
       </group>
+    </group>
+  )
+}
+
+/** 別人手上的牌：牌背朝外，張數和實際手牌數一樣 */
+function HeldFan({ n }: { n: number }) {
+  const back = cardBackTexture()
+  const k = Math.min(n, 12)
+  const spread = Math.min(0.14 * Math.max(0, k - 1), 1.2)
+  return (
+    <group position={[0, 1.42, 0.6]} rotation-x={-0.25}>
+      {Array.from({ length: k }, (_, i) => {
+        const a = k > 1 ? -spread / 2 + (spread * i) / (k - 1) : 0
+        return (
+          <group key={i} rotation-z={-a} position={[0, 0, -i * 0.004]}>
+            <mesh position={[0, 0.17, 0]} castShadow>
+              <planeGeometry args={[0.2, 0.29]} />
+              <meshStandardMaterial map={back} side={THREE.DoubleSide} roughness={0.8} />
+            </mesh>
+          </group>
+        )
+      })}
     </group>
   )
 }
@@ -310,6 +451,7 @@ function Seat({
   acting,
   aiControlled,
   reduced,
+  mode,
 }: {
   p: PublicPlayer
   v: GameView
@@ -317,6 +459,7 @@ function Seat({
   acting: boolean
   aiControlled: boolean
   reduced: boolean
+  mode: ViewMode
 }) {
   const me = p.seat === v.me
   const pos = polar(theta, SEAT_R, 0)
@@ -340,7 +483,17 @@ function Seat({
   return (
     <group>
       <group position={pos} rotation-y={theta + Math.PI}>
-        {!me && <Figure coat={COATS[p.seat % COATS.length]} opacity={opacity} slump={p.status !== 'alive'} acting={acting} reduced={reduced} seat={p.seat} />}
+        {!me && (
+          <Figure
+            coat={COATS[p.seat % COATS.length]}
+            opacity={opacity}
+            slump={p.status !== 'alive'}
+            acting={acting}
+            reduced={reduced}
+            seat={p.seat}
+            cards={p.status === 'alive' ? p.handCount : 0}
+          />
+        )}
       </group>
       {/* 行動中：桌緣亮起的光 */}
       {(acting || winner) && (
@@ -350,6 +503,7 @@ function Seat({
         </mesh>
       )}
       <IntelRow cards={p.intel} theta={theta} />
+      {!(me && mode === 'first') && (
       <Html
         position={me ? polar(theta, TABLE_R + 0.3, TABLE_Y + 0.1) : polar(theta, SEAT_R, 2.85)}
         center
@@ -366,6 +520,7 @@ function Seat({
           {ch ? `${ch.name}${p.charFaceUp ? '' : '（蓋伏）'}` : '角色蓋伏'}
           {p.faction && <span className={`faction f-${p.faction}`}>{FACTION_NAME[p.faction]}</span>}
         </div>
+        <IntelSummary cards={p.intel} />
         {marks.length > 0 && (
           <div className="plate-marks">
             {marks.map((m) => (
@@ -376,6 +531,7 @@ function Seat({
           </div>
         )}
       </Html>
+      )}
     </group>
   )
 }

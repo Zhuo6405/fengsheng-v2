@@ -5,6 +5,7 @@ import type { GameView } from '../../engine/view'
 import { CardFace, FactionBadge, IntelChip, SEAL } from './components'
 import { useLocalController, useSecondsLeft, type GameController, type Social } from './controller'
 import { DocsButtons } from './Docs'
+import { IntelBoard } from './IntelSummary'
 import { recordResult } from './history'
 import { ChatPanel, VoiceControls } from './social'
 
@@ -134,6 +135,23 @@ function Table({
   const [tab, setTab] = useState<'log' | 'chat'>('log')
   const [seenChat, setSeenChat] = useState(0)
   const [sideOpen, setSideOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'first' | 'overview'>(() => {
+    try {
+      return localStorage.getItem('fs2-view') === 'overview' ? 'overview' : 'first'
+    } catch {
+      return 'first'
+    }
+  })
+  const toggleView = () =>
+    setViewMode((m) => {
+      const next = m === 'first' ? 'overview' : 'first'
+      try {
+        localStorage.setItem('fs2-view', next)
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
   const me = v.players[v.me]
   const myChar = me.character ? CHAR_BY_ID[me.character] : null
   const d = v.decision
@@ -204,11 +222,18 @@ function Table({
       <div className="layout">
         <section className="stage" aria-label="牌桌（可拖曳旋轉視角）">
           <Suspense fallback={<div className="stage-loading">牌桌佈置中…</div>}>
-            <TableScene v={v} waitingOn={ctl.waitingOn} aiControlled={ctl.aiControlled} />
+            <TableScene v={v} waitingOn={ctl.waitingOn} aiControlled={ctl.aiControlled} mode={viewMode} selected={sel} />
           </Suspense>
           <div className="stage-hud">
             <Centre v={v} />
-            <p className="stage-piles">牌庫 {v.deckCount}．棄牌 {v.discardCount}．可拖曳旋轉視角</p>
+            <p className="stage-piles">
+              牌庫 {v.deckCount}．棄牌 {v.discardCount}．拖曳可{viewMode === 'first' ? '轉頭' : '旋轉視角'}
+            </p>
+          </div>
+          <div className="stage-view">
+            <button type="button" onClick={toggleView} aria-pressed={viewMode === 'overview'}>
+              {viewMode === 'first' ? '切換到俯瞰視角' : '切換到第一人稱'}
+            </button>
           </div>
         </section>
 
@@ -241,6 +266,7 @@ function Table({
               </details>
             )}
           </div>
+          <IntelBoard v={v} />
           {social && (
             <div className="tabs" role="tablist">
               <button type="button" role="tab" aria-selected={tab === 'log'} className={tab === 'log' ? 'on' : ''} onClick={() => setTab('log')}>

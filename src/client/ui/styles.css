@@ -2090,3 +2090,123 @@ button:disabled {
     display: none;
   }
 }
+
+/* ───────── 情報總覽 ───────── */
+
+.intel-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+}
+
+.intel-sum.is-empty {
+  color: #7d6e5a;
+  font-size: 12px;
+}
+
+.intel-counts {
+  display: inline-flex;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ic-red {
+  color: #e0675e;
+}
+.ic-blue {
+  color: #7fa8d6;
+}
+.ic-black {
+  color: #b9b0a3;
+}
+.ic-black.is-danger {
+  color: #ff8a7a;
+  text-decoration: underline;
+}
+
+.intel-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.plate .intel-chips .chip {
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 3px;
+}
+
+.plate .intel-sum {
+  max-width: 210px;
+}
+
+.intel-board {
+  padding: 8px 14px 10px;
+  border-bottom: 1px solid var(--desk-line);
+}
+
+.intel-board h3 {
+  margin: 0 0 6px;
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--brass);
+}
+
+.intel-board ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.intel-board li {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  align-items: start;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.intel-board li.is-out {
+  opacity: 0.5;
+}
+
+.intel-board .intel-sum {
+  margin-top: 0;
+}
+
+.ib-name {
+  font-family: var(--serif);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  /* 手機上名牌只顯示張數，詳細看「紀錄與聊天」裡的總覽 */
+  .plate .intel-chips {
+    display: none;
+  }
+  .plate .intel-counts {
+    font-size: 11px;
+  }
+}
+
+.stage-view {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+}
+
+.stage-view button {
+  background: rgba(24, 16, 11, 0.85) !important;
+  font-size: 14px;
+}
