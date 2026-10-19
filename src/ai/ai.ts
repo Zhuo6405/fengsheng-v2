@@ -209,6 +209,7 @@ function decidePriority(v: GameView): Action {
 function decideAccept(v: GameView): Action {
   const t = v.trans!
   const me = v.players[v.me]
+  if (v.decision?.type === 'accept' && v.decision.forced) return { type: 'accept' }
   if (t.card) return wantCard(v, t.card) > 0 ? { type: 'accept' } : { type: 'decline' }
   const bl = blackOf(me.intel)
   let p = [0.45, 0.25, 0.04][Math.min(bl, 2)]

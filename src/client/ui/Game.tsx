@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useGameSounds, useSoundOn } from './useGameSounds'
 import { CHAR_BY_ID, COLOUR_NAME, FACTION_NAME, KIND_DESC, KIND_NAME, METHOD_NAME } from '../../engine/data'
 import type { Action, AskView, Card, GameConfig, LegalPlay } from '../../engine/types'
 import type { GameView } from '../../engine/view'
@@ -152,6 +153,8 @@ function Table({
       }
       return next
     })
+  useGameSounds(v, social?.chat, social?.me)
+  const [soundOn, setSoundOn] = useSoundOn()
   const me = v.players[v.me]
   const myChar = me.character ? CHAR_BY_ID[me.character] : null
   const d = v.decision
@@ -209,6 +212,9 @@ function Table({
         </span>
         {social && <VoiceControls voice={social.voice} speakers={social.room.members.filter((m) => m.inVoice).length} />}
         {topExtra}
+        <button type="button" className="ghost sound-btn" onClick={() => setSoundOn(!soundOn)} aria-pressed={soundOn} title={soundOn ? '關閉音效' : '開啟音效'}>
+          {soundOn ? '音效 開' : '音效 關'}
+        </button>
         <DocsButtons />
         <button type="button" className="ghost side-toggle" onClick={() => setSideOpen((o) => !o)} aria-expanded={sideOpen}>
           {sideOpen ? '收起' : '紀錄與聊天'}
@@ -390,6 +396,7 @@ function describe(v: GameView): string {
     case 'play':
       return '你的出牌階段：可以先使用功能牌，最後必須傳出一張情報。點選一張手牌。'
     case 'accept':
+      if (d.forced) return t && t.holder === t.sender ? '情報回到你手上，你必須接收。' : '你被鎖定了，這份情報必須接收。'
       return t?.card ? `要接收這份情報（${t.card.colour === 'black' ? '假情報' : `${COLOUR_NAME[t.card.colour]}色情報`}）嗎？` : '情報傳到你面前，要接收嗎？你不知道內容。'
     case 'ask':
       return d.ask.prompt
@@ -452,9 +459,11 @@ function Prompt({
           <button type="button" className="primary" onClick={() => act({ type: 'accept' })}>
             接收情報
           </button>
-          <button type="button" onClick={() => act({ type: 'decline' })}>
-            不接收
-          </button>
+          {!d.forced && (
+            <button type="button" onClick={() => act({ type: 'decline' })}>
+              不接收
+            </button>
+          )}
         </div>
       )}
 

@@ -1322,6 +1322,7 @@ function stepTransmit(s: GameState): boolean {
     s.window = null
     const r = peekNext(s)
     t.toSender = false
+    t.forced = false
     t.holder = r
     t.hops++
     t.stage = 'B'
@@ -1347,10 +1348,12 @@ function stepTransmit(s: GameState): boolean {
       return true
     }
     if (t.holder === t.sender || s.locks.includes(t.holder)) {
-      log(s, t.holder === t.sender ? `情報回到傳出者，${nm(s, t.holder)} 必須接收。` : `${nm(s, t.holder)} 被鎖定，必須接收。`)
-      t.obtainedBy = t.holder
-      obtain(s, t.holder, t.card, { by: 'trans', sender: t.sender })
-      return true
+      // 必須接收：仍然讓本人按下「接收情報」，但沒有拒絕的選項
+      if (!t.forced) {
+        t.forced = true
+        log(s, t.holder === t.sender ? `情報回到傳出者，${nm(s, t.holder)} 必須接收。` : `${nm(s, t.holder)} 被鎖定，必須接收。`)
+      }
+      return false
     }
     return false
   }
@@ -1459,7 +1462,7 @@ export function getDecisions(s: GameState): Decision[] {
   }
   if (s.q.length) return []
   if (s.prio) return [{ type: 'priority', player: s.prio.current, ctx: currentCtx(s) }]
-  if (s.phase === 'transmit' && s.trans?.stage === 'decide') return [{ type: 'accept', player: s.trans.holder }]
+  if (s.phase === 'transmit' && s.trans?.stage === 'decide') return [{ type: 'accept', player: s.trans.holder, forced: !!s.trans.forced }]
   if (s.phase === 'play') return [{ type: 'play', player: s.active }]
   return []
 }
@@ -1491,6 +1494,7 @@ export function applyAction(state: GameState, p: number, a: Action): GameState {
         t.obtainedBy = p
         obtain(s, p, t.card, { by: 'trans', sender: t.sender })
       } else if (a.type === 'decline') {
+        if (t.forced) fail('你被鎖定了，必須接收這份情報')
         log(s, `${pl.name} 不接收。`)
         if (t.method === 'direct') t.toSender = true
         t.stage = 'hopStart'

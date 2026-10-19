@@ -114,6 +114,8 @@ export interface Transmission {
   holder: number
   target: number | null
   stage: 'hopStart' | 'A' | 'B' | 'decide'
+  /** 被鎖定或回到傳出者：只能接收 */
+  forced?: boolean
   /** 已經看過情報內容的玩家 */
   peeked: number[]
   toSender: boolean
@@ -208,7 +210,7 @@ export type Decision =
   | { type: 'choose_character'; player: number; options: string[] }
   | { type: 'play'; player: number }
   | { type: 'priority'; player: number; ctx: Ctx }
-  | { type: 'accept'; player: number }
+  | { type: 'accept'; player: number; forced?: boolean }
   | { type: 'ask'; player: number; ask: AskView }
 
 export type Action =

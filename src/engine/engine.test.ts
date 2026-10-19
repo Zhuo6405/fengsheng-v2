@@ -60,10 +60,37 @@ describe('流程', () => {
     // 每個人都拒收
     for (let i = 0; i < 10 && s.trans; i++) {
       const d = getDecisions(s)[0]
-      if (d.type === 'accept') s = applyAction(s, d.player, { type: 'decline' })
+      if (d.type === 'accept' && !d.forced) s = applyAction(s, d.player, { type: 'decline' })
       else break
     }
+    // 回到傳出者：只能接收，不能拒絕
+    const d = getDecisions(s)[0]
+    expect(d).toMatchObject({ type: 'accept', player: a, forced: true })
+    expect(() => applyAction(s, a, { type: 'decline' })).toThrow()
+    s = applyAction(s, a, { type: 'accept' })
     expect(s.players[a].intel).toContain(secret)
+  })
+})
+
+describe('鎖定', () => {
+  it('被鎖定的人只能接收，不能拒絕', () => {
+    let s = setup(4, 7)
+    const a = s.active
+    const tg = (a + 1) % 4
+    const secret = s.cards.find((c) => c.method === 'direct' && c.kind !== 'counter')!.id
+    s = structuredClone(s)
+    for (const p of s.players) p.hand = []
+    s.deck = s.deck.filter((x) => x !== secret)
+    s.discard = s.discard.filter((x) => x !== secret)
+    s.players[a].hand = [secret]
+    s.locks = [tg]
+    s = applyAction(s, a, { type: 'send', card: secret, target: tg })
+    const d = getDecisions(s)[0]
+    expect(d).toMatchObject({ type: 'accept', player: tg, forced: true })
+    expect(viewFor(s, tg).decision).toMatchObject({ type: 'accept', forced: true })
+    expect(() => applyAction(s, tg, { type: 'decline' })).toThrow()
+    s = applyAction(s, tg, { type: 'accept' })
+    expect(s.players[tg].intel).toContain(secret)
   })
 })
 
