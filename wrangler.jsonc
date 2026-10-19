@@ -1,0 +1,18 @@
+{
+  // Cloudflare Worker：同一個網址提供網頁、開房 API 與房間的 WebSocket
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fengsheng",
+  "main": "src/server/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/ws/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "observability": { "enabled": true }
+}
