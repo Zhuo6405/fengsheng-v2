@@ -2210,3 +2210,9 @@ button:disabled {
   background: rgba(24, 16, 11, 0.85) !important;
   font-size: 14px;
 }
+
+/* 3D 場景與名牌的共同容器 */
+.scene-host {
+  position: absolute;
+  inset: 0;
+}

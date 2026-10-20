@@ -1,7 +1,9 @@
+import type React from 'react'
 import { Html, OrbitControls } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import * as THREE from 'three'
+import { clampedPosition, keepVisible } from './plateClamp'
 import { CHAR_BY_ID, FACTION_NAME } from '../../engine/data'
 import type { Card, Method } from '../../engine/types'
 import type { GameView, PublicPlayer } from '../../engine/view'
@@ -22,6 +24,9 @@ const polar = (theta: number, r: number, y: number) => new THREE.Vector3(r * Mat
 
 export type ViewMode = 'first' | 'overview'
 
+/** 名牌固定放進這個容器：避免 drei 在事件連線後換容器、把名牌內容弄丟 */
+const PlateHost = createContext<RefObject<HTMLDivElement | null> | null>(null)
+
 export interface SceneProps {
   v: GameView
   waitingOn: number[]
@@ -40,46 +45,51 @@ export function TableScene({ v, waitingOn, aiControlled, mode, selected }: Scene
     })
   }, [])
   const reduced = useMemo(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false, [])
+  const host = useRef<HTMLDivElement>(null)
   return (
-    <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 6.4, 8.2], fov: 44 }} gl={{ antialias: true }} key={fontsReady}>
-      <color attach="background" args={['#1b130e']} />
-      <fog attach="fog" args={['#1b130e', 18, 34]} />
-      <ambientLight intensity={0.75} color="#ffe8c8" />
-      <hemisphereLight args={['#ffe2b8', '#2a1a10', 0.9]} />
-      <directionalLight position={[0, 6, 9]} intensity={0.9} color="#ffe6c4" />
-      {mode === 'overview' ? <CameraRig /> : <FirstPersonRig />}
-      <Lamp />
-      <Floor />
-      <Table />
-      <Piles deck={v.deckCount} discard={v.discardCount} />
-      {v.players.map((p) => (
-        <Seat
-          key={p.seat}
-          p={p}
-          v={v}
-          theta={seatAngle(p.seat, v.me, v.players.length)}
-          acting={waitingOn.includes(p.seat)}
-          aiControlled={aiControlled.includes(p.seat)}
-          reduced={reduced}
-          mode={mode}
-        />
-      ))}
-      {mode === 'first' && <MyHand v={v} selected={selected ?? null} />}
-      <Dossier v={v} reduced={reduced} />
-      {mode === 'overview' && (
-      <OrbitControls
-        target={[0, TABLE_Y, 0.2]}
-        enablePan={false}
-        minDistance={7}
-        maxDistance={22}
-        minPolarAngle={0.35}
-        maxPolarAngle={1.2}
-        minAzimuthAngle={-0.9}
-        maxAzimuthAngle={0.9}
-        enableDamping
-      />
-      )}
-    </Canvas>
+    <div ref={host} className="scene-host">
+      <PlateHost.Provider value={host}>
+        <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 6.4, 8.2], fov: 44 }} gl={{ antialias: true }} key={fontsReady}>
+          <color attach="background" args={['#1b130e']} />
+          <fog attach="fog" args={['#1b130e', 18, 34]} />
+          <ambientLight intensity={0.75} color="#ffe8c8" />
+          <hemisphereLight args={['#ffe2b8', '#2a1a10', 0.9]} />
+          <directionalLight position={[0, 6, 9]} intensity={0.9} color="#ffe6c4" />
+          {mode === 'overview' ? <CameraRig /> : <FirstPersonRig />}
+          <Lamp />
+          <Floor />
+          <Table />
+          <Piles deck={v.deckCount} discard={v.discardCount} />
+          {v.players.map((p) => (
+            <Seat
+              key={p.seat}
+              p={p}
+              v={v}
+              theta={seatAngle(p.seat, v.me, v.players.length)}
+              acting={waitingOn.includes(p.seat)}
+              aiControlled={aiControlled.includes(p.seat)}
+              reduced={reduced}
+              mode={mode}
+            />
+          ))}
+          {mode === 'first' && <MyHand v={v} selected={selected ?? null} />}
+          <Dossier v={v} reduced={reduced} />
+          {mode === 'overview' && (
+          <OrbitControls
+            target={[0, TABLE_Y, 0.2]}
+            enablePan={false}
+            minDistance={7}
+            maxDistance={22}
+            minPolarAngle={0.35}
+            maxPolarAngle={1.2}
+            minAzimuthAngle={-0.9}
+            maxAzimuthAngle={0.9}
+            enableDamping
+          />
+          )}
+        </Canvas>
+      </PlateHost.Provider>
+    </div>
   )
 }
 
@@ -461,6 +471,7 @@ function Seat({
   reduced: boolean
   mode: ViewMode
 }) {
+  const plateHost = useContext(PlateHost)
   const me = p.seat === v.me
   const pos = polar(theta, SEAT_R, 0)
   const opacity = p.status === 'alive' ? 1 : p.status === 'dead' ? 0.45 : 0.25
@@ -507,6 +518,9 @@ function Seat({
       <Html
         position={me ? polar(theta, TABLE_R + 0.3, TABLE_Y + 0.1) : polar(theta, SEAT_R, 2.85)}
         center
+        calculatePosition={mode === 'first' ? clampedPosition : undefined}
+          portal={(plateHost ?? undefined) as React.RefObject<HTMLElement> | undefined}
+        onOcclude={keepVisible}
         className={`plate ${me ? 'is-me' : ''} ${acting ? 'is-acting' : ''} ${p.status !== 'alive' ? 'is-out' : ''} ${winner ? 'is-winner' : ''}`}
         zIndexRange={[20, 0]}
       >
