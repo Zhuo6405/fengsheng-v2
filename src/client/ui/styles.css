@@ -2216,3 +2216,66 @@ button:disabled {
   position: absolute;
   inset: 0;
 }
+
+/* 出牌選單（從下方滑出） */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(10, 6, 3, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet {
+  width: min(640px, 100%);
+  max-height: 78dvh;
+  overflow-y: auto;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+  background: var(--desk-2);
+  border: 1px solid var(--desk-line);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  animation: sheet-up 0.18s ease-out;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+.sheet-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.sheet-head p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+.sheet-head b {
+  color: var(--text);
+}
+.sheet-choices .choice-group {
+  flex-wrap: wrap;
+}
+.sheet-choices button {
+  min-height: 44px;
+}
+.sheet-close {
+  width: 100%;
+  margin-top: 12px;
+  min-height: 44px;
+}
+
+/* 手機：下方區域可以捲動，不會被切掉 */
+@media (max-width: 900px) {
+  .bench {
+    max-height: 48dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

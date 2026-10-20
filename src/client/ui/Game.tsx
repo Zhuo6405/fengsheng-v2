@@ -187,7 +187,21 @@ function Table({
   }, [v.legal])
   // 技能要從手牌選牌時，手牌改成多選
   const handAsk = askNow && askNow.choice.kind === 'cards' && askNow.choice.zone === 'hand' ? askNow.choice : null
+  // 手機：點一下選牌，再點一下（或連點兩下）開啟出牌選單
+  const touch = useMemo(() => {
+    try {
+      return window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 760
+    } catch {
+      return false
+    }
+  }, [])
+  const [openTick, setOpenTick] = useState(0)
+  const canUse = d?.type === 'play' || d?.type === 'priority'
   const clickCard = (id: number) => {
+    if (!handAsk && touch && canUse && sel === id) {
+      setOpenTick((t) => t + 1)
+      return
+    }
     if (handAsk) {
       if (!handAsk.ids.includes(id)) return
       setPicked((ps) => (ps.includes(id) ? ps.filter((x) => x !== id) : handAsk.max === 1 ? [id] : ps.length < handAsk.max ? [...ps, id] : ps))
@@ -300,6 +314,8 @@ function Table({
             setSel(null)
             setPicked([])
           }}
+          touch={touch}
+          openTick={openTick}
         />
         <div className="hand" role="group" aria-label="手牌">
           {v.hand.length === 0 && <span className="muted">沒有手牌</span>}
@@ -310,6 +326,11 @@ function Table({
               selected={sel === c.id || picked.includes(c.id)}
               usable={handAsk ? handAsk.ids.includes(c.id) : legalById.has(c.id) || d?.type === 'play'}
               onClick={() => clickCard(c.id)}
+              onDoubleClick={() => {
+                if (handAsk || !canUse) return
+                setSel(c.id)
+                setOpenTick((t) => t + 1)
+              }}
             />
           ))}
         </div>
@@ -424,6 +445,8 @@ function Prompt({
   picked,
   setPicked,
   clear,
+  touch,
+  openTick,
 }: {
   v: GameView
   ctl: GameController
@@ -433,42 +456,28 @@ function Prompt({
   picked: number[]
   setPicked: (p: number[]) => void
   clear: () => void
+  touch: boolean
+  openTick: number
 }) {
   const d = v.decision
   const left = useSecondsLeft(d ? ctl.deadline : null)
+  const [sheet, setSheet] = useState(false)
+  // 換了牌或換了時機就關掉選單；連點兩下（openTick 改變）就打開
+  useEffect(() => setSheet(false), [selCard?.id, d?.type])
+  useEffect(() => {
+    if (openTick) setSheet(true)
+  }, [openTick])
   const act = (a: Action) => {
     ctl.act(a)
+    setSheet(false)
     clear()
   }
   const name = (p: number) => v.players[p].name
   const others = v.players.filter((p) => p.status === 'alive' && p.seat !== v.me)
   const mine = d && d.player === v.me
-
-  return (
-    <div className={`prompt ${mine ? 'is-mine' : ''}`}>
-      <p className="prompt-text">
-        {mine && <span className="your-turn">{d!.type === 'priority' ? '你可以回應' : d!.type === 'ask' ? d!.ask.title : '輪到你了'}</span>}
-        {mine ? describe(v) : describeOthers(v, ctl.waitingOn)}
-        {left != null && <span className={`countdown ${left <= 5 ? 'is-urgent' : ''}`}>剩 {left} 秒</span>}
-      </p>
-
-      {d?.type === 'ask' && <AskPanel v={v} ask={d.ask} picked={picked} setPicked={setPicked} act={act} />}
-
-      {d?.type === 'accept' && (
-        <div className="choices">
-          <button type="button" className="primary" onClick={() => act({ type: 'accept' })}>
-            接收情報
-          </button>
-          {!d.forced && (
-            <button type="button" onClick={() => act({ type: 'decline' })}>
-              不接收
-            </button>
-          )}
-        </div>
-      )}
-
-      {(d?.type === 'play' || d?.type === 'priority') && selCard && (
-        <div className="selected">
+  const options =
+    selCard && d && (d.type === 'play' || d.type === 'priority') ? (
+      <>
           <p className="sel-desc">
             <b>【{KIND_NAME[selCard.kind]}】</b>
             {KIND_DESC[selCard.kind]}
@@ -503,6 +512,54 @@ function Prompt({
                   以{METHOD_NAME[selCard.method]}傳出這張情報
                 </button>
               ))}
+          </div>
+      </>
+    ) : null
+
+  return (
+    <div className={`prompt ${mine ? 'is-mine' : ''}`}>
+      <p className="prompt-text">
+        {mine && <span className="your-turn">{d!.type === 'priority' ? '你可以回應' : d!.type === 'ask' ? d!.ask.title : '輪到你了'}</span>}
+        {mine ? describe(v) : describeOthers(v, ctl.waitingOn)}
+        {left != null && <span className={`countdown ${left <= 5 ? 'is-urgent' : ''}`}>剩 {left} 秒</span>}
+      </p>
+
+      {d?.type === 'ask' && <AskPanel v={v} ask={d.ask} picked={picked} setPicked={setPicked} act={act} />}
+
+      {d?.type === 'accept' && (
+        <div className="choices">
+          <button type="button" className="primary" onClick={() => act({ type: 'accept' })}>
+            接收情報
+          </button>
+          {!d.forced && (
+            <button type="button" onClick={() => act({ type: 'decline' })}>
+              不接收
+            </button>
+          )}
+        </div>
+      )}
+
+      {(d?.type === 'play' || d?.type === 'priority') && selCard && !touch && <div className="selected">{options}</div>}
+      {(d?.type === 'play' || d?.type === 'priority') && selCard && touch && (
+        <div className="selected">
+          <p className="sel-desc">
+            <b>【{KIND_NAME[selCard.kind]}】</b>
+            {KIND_DESC[selCard.kind]}
+          </p>
+          <div className="choices">
+            <button type="button" className="primary" onClick={() => setSheet(true)}>
+              {d.type === 'play' ? '使用或傳出這張牌（或再點一下牌）' : '使用這張牌（或再點一下牌）'}
+            </button>
+          </div>
+        </div>
+      )}
+      {sheet && selCard && (d?.type === 'play' || d?.type === 'priority') && (
+        <div className="sheet-backdrop" onClick={() => setSheet(false)}>
+          <div className="sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="selected">{options}</div>
+            <button type="button" className="sheet-close" onClick={() => setSheet(false)}>
+              取消
+            </button>
           </div>
         </div>
       )}

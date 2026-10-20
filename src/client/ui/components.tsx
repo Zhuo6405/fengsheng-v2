@@ -10,12 +10,14 @@ export function CardFace({
   usable,
   onClick,
   small,
+  onDoubleClick,
 }: {
   card: Card
   selected?: boolean
   usable?: boolean
   onClick?: () => void
   small?: boolean
+  onDoubleClick?: () => void
 }) {
   const cls = ['card', `c-${card.colour}`, selected && 'is-selected', usable && 'is-usable', small && 'is-small']
     .filter(Boolean)
@@ -38,7 +40,7 @@ export function CardFace({
       </div>
     )
   return (
-    <button type="button" className={cls} onClick={onClick} title={`${label}\n${KIND_DESC[card.kind]}`} aria-pressed={selected}>
+    <button type="button" className={cls} onClick={onClick} onDoubleClick={onDoubleClick} title={`${label}\n${KIND_DESC[card.kind]}`} aria-pressed={selected}>
       {inner}
     </button>
   )
