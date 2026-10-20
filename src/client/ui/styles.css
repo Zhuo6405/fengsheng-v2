@@ -2279,3 +2279,40 @@ button:disabled {
     -webkit-overflow-scrolling: touch;
   }
 }
+/* 說明文件開著時：鎖住背景，捲動只發生在文件裡 */
+html.doc-open,
+html.doc-open body {
+  overflow: hidden;
+}
+
+.doc-overlay {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 說明文件：不被外層（大廳標題）的樣式影響；寬表格在框內左右捲，不撐破畫面 */
+.doc-overlay,
+.doc {
+  white-space: normal;
+  text-align: left;
+}
+
+.doc {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.doc p {
+  color: inherit;
+  font-family: inherit;
+  margin: 0.7em 0;
+}
+
+.doc-table {
+  max-width: 100%;
+}
+
+.doc td {
+  overflow-wrap: normal;
+}

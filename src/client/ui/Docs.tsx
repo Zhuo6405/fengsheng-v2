@@ -11,7 +11,14 @@ export function DocsButtons() {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(null)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // 開著的時候背景不跟著捲動；關掉後通知 3D 牌桌重新量尺寸（手機網址列伸縮後畫面才不會空白）
+    document.documentElement.classList.add('doc-open')
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.documentElement.classList.remove('doc-open')
+      window.scrollTo(0, 0)
+      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
+    }
   }, [open])
   return (
     <span className="docs-btns">
