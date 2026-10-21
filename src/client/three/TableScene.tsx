@@ -36,18 +36,33 @@ export interface SceneProps {
   selected?: number | null
 }
 
+/**
+ * 手機瀏覽器在記憶體吃緊時會收回 WebGL：只在「目前畫面上這張畫布」真的被收回時重建一次。
+ * 牌桌重建（例如字型載入完）時，舊畫布會被刻意釋放，那不算，否則會一直重建造成閃爍。
+ */
+let liveCanvas: HTMLCanvasElement | null = null
+let rebuilds: number[] = []
 function watchContext(canvas: HTMLCanvasElement, rebuild: () => void) {
-  let done = false
+  liveCanvas = canvas
+  const isLive = () => canvas === liveCanvas && canvas.isConnected
   const go = () => {
-    if (done) return
-    done = true
+    if (!isLive()) return
+    // 保險：一分鐘內最多重建 3 次
+    const now = Date.now()
+    rebuilds = rebuilds.filter((x) => now - x < 60_000)
+    if (rebuilds.length >= 3) return
+    rebuilds.push(now)
+    liveCanvas = null
+    document.removeEventListener('visibilitychange', onVisible)
     setTimeout(rebuild, 300)
   }
   canvas.addEventListener('webglcontextlost', (e) => {
+    if (!isLive()) return
     e.preventDefault()
     go()
   })
-  const onVisible = () => {
+  function onVisible() {
+    if (!isLive()) return document.removeEventListener('visibilitychange', onVisible)
     if (document.visibilityState !== 'visible') return
     const gl = (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) as WebGLRenderingContext | null
     if (gl?.isContextLost()) go()
